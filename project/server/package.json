@@ -1,0 +1,20 @@
+{
+  "name": "proxy-browser-server",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "cors": "^2.8.5",
+    "morgan": "^1.10.0",
+    "jsdom": "^23.0.1",
+    "dompurify": "^3.0.7",
+    "lru-cache": "^10.1.0"
+  }
+}
