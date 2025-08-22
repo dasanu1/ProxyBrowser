@@ -1,10 +1,12 @@
 import express from 'express';
+import http from 'http';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cors from 'cors';
 import morgan from 'morgan';
 import { LRUCache } from 'lru-cache';
 import { fetchAndSanitize, rewriteHTML, isValidUrl, isPrivateIP } from './proxy-utils.js';
+import { locations } from './locations.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -71,6 +73,61 @@ app.get('/api/status', (req, res) => {
     uptime: process.uptime(),
     memory: process.memoryUsage(),
   });
+});
+
+// Function to test proxy connectivity and measure ping
+async function testProxyPing(proxyUrl) {
+  return new Promise((resolve) => {
+    const startTime = Date.now();
+    const timeout = 5000; // 5 second timeout
+    
+    try {
+      // For HTTP proxies, we test by making a request through the proxy
+      const options = {
+        hostname: new URL(proxyUrl).hostname,
+        port: new URL(proxyUrl).port || 80,
+        path: 'http://www.google.com',
+        method: 'GET',
+        timeout: timeout,
+        headers: {
+          'Host': 'www.google.com'
+        }
+      };
+      
+      const req = http.get(options, (res) => {
+        const responseTime = Date.now() - startTime;
+        res.destroy(); // Don't need to read the response body
+        resolve(responseTime);
+      });
+      
+      req.on('timeout', () => {
+        req.destroy();
+        resolve(null); // Ping failed
+      });
+      
+      req.on('error', (error) => {
+        req.destroy();
+        resolve(null); // Ping failed
+      });
+    } catch (error) {
+      resolve(null); // Invalid URL or other error
+    }
+  });
+}
+
+// Location status endpoint
+app.get('/api/locations/status', async (req, res) => {
+  const locationStatus = await Promise.all(
+    locations.map(async (location) => {
+      const ping = await testProxyPing(location.proxyUrl);
+      return {
+        name: location.name,
+        flag: location.flag,
+        ping,
+      };
+    })
+  );
+  res.json(locationStatus);
 });
 
 // Main proxy endpoint
@@ -157,20 +214,70 @@ app.post('/api/proxy/fetch', async (req, res) => {
   } catch (error) {
     console.error('[PROXY] Error:', error.message);
     
-    const errorResponse = {
-      error: 'Failed to fetch content',
-      code: 'FETCH_ERROR',
-      message: error.message,
-      processingTime: Date.now() - startTime,
-    };
+    // Try direct fetch as fallback
+    try {
+      console.log(`[PROXY] Trying direct fetch as fallback for: ${req.body.url}`);
+      const directUrl = req.body.url.startsWith('http') ? req.body.url : `https://${req.body.url}`;
+      
+      const directResponse = await fetch(directUrl, {
+        method: 'GET',
+        headers: {
+          'User-Agent': req.headers['user-agent'] || 'ProxyBrowser/1.0',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        },
+        redirect: 'follow',
+      });
 
-    // Return appropriate status codes
-    if (error.name === 'AbortError') {
-      res.status(408).json({ ...errorResponse, code: 'TIMEOUT' });
-    } else if (error.code === 'ENOTFOUND') {
-      res.status(404).json({ ...errorResponse, code: 'NOT_FOUND' });
-    } else {
-      res.status(500).json(errorResponse);
+      if (!directResponse.ok) {
+        throw new Error(`HTTP ${directResponse.status}: ${directResponse.statusText}`);
+      }
+
+      const contentType = directResponse.headers.get('content-type') || '';
+      if (!contentType.includes('text/html')) {
+        throw new Error(`Unsupported content type: ${contentType}`);
+      }
+
+      const html = await directResponse.text();
+      
+      // Parse and extract title
+      const dom = new JSDOM(html);
+      const title = dom.window.document.title || new URL(directUrl).hostname;
+      
+      // Sanitize and rewrite
+      const sanitizedHTML = sanitizeHTML(html, directUrl);
+      const rewrittenHTML = rewriteHTML(sanitizedHTML, directUrl);
+      
+      const response = {
+        html: rewrittenHTML,
+        title: title,
+        url: directUrl,
+        snapshot: '',
+        processingTime: Date.now() - startTime,
+        cached: false,
+        fallback: true
+      };
+
+      console.log(`[PROXY] Direct fetch success: ${directUrl} (${Date.now() - startTime}ms)`);
+      return res.json(response);
+      
+    } catch (directError) {
+      console.error('[PROXY] Direct fetch also failed:', directError.message);
+      
+      const errorResponse = {
+        error: 'Failed to fetch content',
+        code: 'FETCH_ERROR',
+        message: error.message,
+        processingTime: Date.now() - startTime,
+      };
+
+      // Return appropriate status codes
+      if (error.name === 'AbortError' || directError.name === 'AbortError') {
+        res.status(408).json({ ...errorResponse, code: 'TIMEOUT' });
+      } else if (error.code === 'ENOTFOUND' || directError.code === 'ENOTFOUND') {
+        res.status(404).json({ ...errorResponse, code: 'NOT_FOUND' });
+      } else {
+        res.status(500).json(errorResponse);
+      }
     }
   }
 });

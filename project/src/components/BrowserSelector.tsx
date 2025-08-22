@@ -7,6 +7,7 @@ interface Browser {
   name: string;
   icon: React.ReactNode;
   description: string;
+  disabled?: boolean;
 }
 
 interface BrowserSelectorProps {
@@ -21,27 +22,30 @@ const BrowserSelector: React.FC<BrowserSelectorProps> = ({
   const [isOpen, setIsOpen] = useState(false);
 
   const browsers: Browser[] = [
-    { 
-      id: 'duckduckgo', 
-      name: 'DuckDuckGo', 
+    {
+      id: 'duckduckgo',
+      name: 'DuckDuckGo',
       icon: <Search className="w-5 h-5 text-orange-500" />,
-      description: 'Privacy-focused search'
+      description: 'Privacy-focused search',
     },
-    { 
-      id: 'google', 
-      name: 'Google', 
+    {
+      id: 'google',
+      name: 'Google',
       icon: <Globe className="w-5 h-5 text-blue-500" />,
-      description: 'Standard web search'
+      description: 'Standard web search',
+      disabled: true,
     },
-    { 
-      id: 'tor', 
-      name: 'Tor Browser', 
+    {
+      id: 'tor',
+      name: 'Tor Browser',
       icon: <Shield className="w-5 h-5 text-purple-500" />,
-      description: 'Anonymous browsing'
+      description: 'Anonymous browsing',
+      disabled: true,
     },
   ];
 
-  const selectedBrowserData = browsers.find(browser => browser.id === selectedBrowser) || browsers[0];
+  const selectedBrowserData =
+    browsers.find((browser) => browser.id === selectedBrowser) || browsers[0];
 
   return (
     <div className="relative">
@@ -52,7 +56,9 @@ const BrowserSelector: React.FC<BrowserSelectorProps> = ({
         whileTap={{ scale: 0.95 }}
       >
         {selectedBrowserData.icon}
-        <span className="text-gray-700 font-medium">{selectedBrowserData.name}</span>
+        <span className="text-gray-700 font-medium">
+          {selectedBrowserData.name}
+        </span>
         <motion.div
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: 0.2 }}
@@ -74,16 +80,31 @@ const BrowserSelector: React.FC<BrowserSelectorProps> = ({
               <motion.button
                 key={browser.id}
                 onClick={() => {
-                  onBrowserChange(browser.id);
-                  setIsOpen(false);
+                  if (!browser.disabled) {
+                    onBrowserChange(browser.id);
+                    setIsOpen(false);
+                  }
                 }}
-                className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
-                whileHover={{ backgroundColor: '#f9fafb' }}
+                className={`w-full flex items-center space-x-3 px-4 py-3 transition-colors text-left ${
+                  browser.disabled
+                    ? 'cursor-not-allowed opacity-50'
+                    : 'hover:bg-gray-50'
+                }`}
+                whileHover={{
+                  backgroundColor: browser.disabled ? '#fff' : '#f9fafb',
+                }}
+                title={
+                  browser.disabled ? `${browser.name} is not available yet` : ''
+                }
               >
                 {browser.icon}
                 <div>
-                  <div className="font-medium text-gray-900">{browser.name}</div>
-                  <div className="text-sm text-gray-500">{browser.description}</div>
+                  <div className="font-medium text-gray-900">
+                    {browser.name}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {browser.description}
+                  </div>
                 </div>
               </motion.button>
             ))}

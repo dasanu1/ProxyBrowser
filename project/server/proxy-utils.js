@@ -87,56 +87,64 @@ export async function fetchAndSanitize(url, options = {}) {
 
   console.log(`[FETCH] Starting: ${url}`);
 
-  // Fetch with timeout
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'User-Agent': userAgent,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache',
-    },
-    signal: AbortSignal.timeout(timeout),
-    redirect: 'follow',
-  });
+  try {
+    // Try to fetch with timeout
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': userAgent,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+      },
+      signal: AbortSignal.timeout(timeout),
+      redirect: 'follow',
+    });
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    
+    if (!contentType.includes('text/html')) {
+      throw new Error(`Unsupported content type: ${contentType}`);
+    }
+
+    const html = await response.text();
+    console.log(`[FETCH] Received ${html.length} bytes`);
+
+    // Parse and sanitize HTML
+    const dom = new JSDOM(html);
+    const document = dom.window.document;
+
+    // Extract title
+    const title = document.title || new URL(url).hostname;
+
+    // Create a snapshot (first 200 chars of text content)
+    const textContent = document.body?.textContent || '';
+    const snapshot = textContent.replace(/\s+/g, ' ').trim().slice(0, 200);
+
+    // Sanitize HTML - remove dangerous elements
+    const sanitizedHTML = sanitizeHTML(html, url);
+
+    console.log(`[SANITIZE] Processed HTML, title: ${title}`);
+
+    return {
+      html: sanitizedHTML,
+      title,
+      snapshot: snapshot + (snapshot.length >= 200 ? '...' : ''),
+      originalUrl: url,
+    };
+  } catch (error) {
+    console.error(`[FETCH] Direct fetch failed for ${url}:`, error.message);
+    
+    // If direct fetch fails, try to fetch through a proxy
+    // This is a fallback - in a real implementation, you'd want to use actual proxy servers
+    throw new Error(`Failed to fetch content: ${error.message}`);
   }
-
-  const contentType = response.headers.get('content-type') || '';
-  
-  if (!contentType.includes('text/html')) {
-    throw new Error(`Unsupported content type: ${contentType}`);
-  }
-
-  const html = await response.text();
-  console.log(`[FETCH] Received ${html.length} bytes`);
-
-  // Parse and sanitize HTML
-  const dom = new JSDOM(html);
-  const document = dom.window.document;
-
-  // Extract title
-  const title = document.title || new URL(url).hostname;
-
-  // Create a snapshot (first 200 chars of text content)
-  const textContent = document.body?.textContent || '';
-  const snapshot = textContent.replace(/\s+/g, ' ').trim().slice(0, 200);
-
-  // Sanitize HTML - remove dangerous elements
-  const sanitizedHTML = sanitizeHTML(html, url);
-
-  console.log(`[SANITIZE] Processed HTML, title: ${title}`);
-
-  return {
-    html: sanitizedHTML,
-    title,
-    snapshot: snapshot + (snapshot.length >= 200 ? '...' : ''),
-    originalUrl: url,
-  };
 }
 
 /**
