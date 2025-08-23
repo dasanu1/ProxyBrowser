@@ -35,11 +35,87 @@ function App() {
     }, 3000);
   };
 
+  const isValidUrl = (string) => {
+    try {
+      const url = new URL(string.startsWith('http') ? string : `https://${string}`);
+      return url.hostname.includes('.') && url.hostname.length > 1;
+    } catch {
+      return false;
+    }
+  };
+
+  const getSearchUrl = (query, browser) => {
+    const searchEngines = {
+      duckduckgo: `https://duckduckgo.com/?q=${encodeURIComponent(query)}&t=h_&ia=web`,
+      tor: `https://duckduckgo.com/?q=${encodeURIComponent(query)}&t=h_&ia=web` // Use DuckDuckGo for Tor as well
+    };
+    return searchEngines[browser] || searchEngines.duckduckgo;
+  };
+
+  const handleTestHtml = async () => {
+    showToast('Testing HTML rendering...', 'info');
+
+    // Create new tab for test
+    const tabId = Date.now().toString();
+    const newTab = {
+      id: tabId,
+      title: 'Loading Test...',
+      url: 'test',
+      content: '',
+      loading: true,
+    };
+
+    setBrowserState(prev => ({
+      ...prev,
+      isOpen: true,
+      isMinimized: false,
+      tabs: [...prev.tabs, newTab],
+      activeTabId: tabId,
+    }));
+
+    try {
+      const response = await fetch('http://localhost:3003/api/debug/test-html');
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      setBrowserState(prev => ({
+        ...prev,
+        tabs: prev.tabs.map(tab =>
+          tab.id === tabId
+            ? { ...tab, title: data.title || 'Test Page', content: data.html, loading: false }
+            : tab
+        ),
+      }));
+
+      showToast('Test HTML loaded successfully!', 'success');
+    } catch (error) {
+      setBrowserState(prev => ({
+        ...prev,
+        tabs: prev.tabs.map(tab =>
+          tab.id === tabId
+            ? {
+                ...tab,
+                title: 'Test Error',
+                content: `<div class="p-8 text-center"><h2 class="text-xl font-bold mb-4">Test Failed</h2><p class="text-gray-600">Error: ${error.message}</p></div>`,
+                loading: false
+              }
+            : tab
+        ),
+      }));
+
+      showToast(`Test failed: ${error.message}`, 'error');
+    }
+  };
+
   const handleSearch = async (query, region) => {
     if (!query.trim()) return;
-    
-    showToast('Starting proxy search...', 'info');
-    
+
+    showToast(`Starting proxy search via ${selectedBrowser}...`, 'info');
+
     // Create new tab
     const tabId = Date.now().toString();
     const newTab = {
@@ -59,13 +135,24 @@ function App() {
     }));
 
     try {
-      const response = await fetch('http://localhost:3001/api/proxy/fetch', {
+      let finalUrl;
+
+      // Check if it's a valid URL
+      if (isValidUrl(query)) {
+        finalUrl = query.startsWith('http') ? query : `https://${query}`;
+      } else {
+        // If not a valid URL, search for it using the selected browser/search engine
+        finalUrl = getSearchUrl(query, selectedBrowser);
+        showToast(`Searching for: ${query} via ${selectedBrowser.charAt(0).toUpperCase() + selectedBrowser.slice(1)}`, 'info');
+      }
+
+      const response = await fetch('http://localhost:3003/api/proxy/fetch', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          url: query.startsWith('http') ? query : `https://${query}`,
+          url: finalUrl,
           regionHint: region,
         }),
       });
@@ -75,11 +162,11 @@ function App() {
       }
 
       const data = await response.json();
-      
+
       setBrowserState(prev => ({
         ...prev,
-        tabs: prev.tabs.map(tab => 
-          tab.id === tabId 
+        tabs: prev.tabs.map(tab =>
+          tab.id === tabId
             ? { ...tab, title: data.title || 'Proxied Page', content: data.html, loading: false }
             : tab
         ),
@@ -89,13 +176,13 @@ function App() {
     } catch (error) {
       setBrowserState(prev => ({
         ...prev,
-        tabs: prev.tabs.map(tab => 
-          tab.id === tabId 
-            ? { 
-                ...tab, 
-                title: 'Error', 
-                content: `<div class="p-8 text-center"><h2 class="text-xl font-bold mb-4">Connection Error</h2><p class="text-gray-600">Unable to load: ${query}</p><p class="text-sm mt-2">Make sure the backend server is running on port 3001</p></div>`, 
-                loading: false 
+        tabs: prev.tabs.map(tab =>
+          tab.id === tabId
+            ? {
+                ...tab,
+                title: 'Error',
+                content: `<div class="p-8 text-center"><h2 class="text-xl font-bold mb-4">Connection Error</h2><p class="text-gray-600">Unable to load: ${query}</p><p class="text-sm mt-2">Make sure the backend server is running on port 3003</p></div>`,
+                loading: false
               }
             : tab
         ),
@@ -121,12 +208,12 @@ function App() {
               
               <div className="flex-1 max-w-lg">
                 <div className="flex justify-center mb-6">
-                  <BrowserSelector 
+                  <BrowserSelector
                     selectedBrowser={selectedBrowser}
                     onBrowserChange={setSelectedBrowser}
                   />
                 </div>
-                
+
                 <SearchBar
                   searchQuery={searchQuery}
                   setSearchQuery={setSearchQuery}
@@ -134,6 +221,16 @@ function App() {
                   setSelectedRegion={setSelectedRegion}
                   onSearch={handleSearch}
                 />
+
+                {/* Debug Test Button */}
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={handleTestHtml}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
+                  >
+                    🧪 Test HTML Rendering
+                  </button>
+                </div>
               </div>
             </div>
           </div>

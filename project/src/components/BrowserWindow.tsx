@@ -293,7 +293,7 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({
               <iframe
                 src={`data:text/html;charset=utf-8,${encodeURIComponent(activeTab.content)}`}
                 className="w-full h-full border-none"
-                sandbox="allow-same-origin"
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
                 title={activeTab.title}
               />
             )}

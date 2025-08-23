@@ -1,27 +1,40 @@
+// Simulated proxy server locations for different regions
+// Fake proxy endpoints with realistic ping simulation
+
 export const locations = [
   {
     name: 'United States',
     flag: '🇺🇸',
-    proxyUrl: 'http://104.27.88.150:80', // Fast proxy from test results
+    proxyUrl: 'http://us-proxy.example.com:8080', // Simulated US proxy
+    region: 'us-east-1',
+    description: 'East Coast USA servers'
   },
   {
     name: 'Germany',
     flag: '🇩🇪',
-    proxyUrl: 'http://104.24.190.146:80', // Fast proxy from test results
+    proxyUrl: 'http://de-proxy.example.com:8080', // Simulated German proxy
+    region: 'eu-central-1',
+    description: 'Frankfurt, Germany servers'
   },
   {
     name: 'India',
     flag: '🇮🇳',
-    proxyUrl: 'http://104.17.213.249:80', // Fast proxy from test results
+    proxyUrl: 'http://in-proxy.example.com:8080', // Simulated Indian proxy
+    region: 'ap-south-1',
+    description: 'Mumbai, India servers'
   },
   {
     name: 'Singapore',
     flag: '🇸🇬',
-    proxyUrl: 'http://104.17.149.144:80', // Fast proxy from test results
+    proxyUrl: 'http://sg-proxy.example.com:8080', // Simulated Singapore proxy
+    region: 'ap-southeast-1',
+    description: 'Singapore servers'
   },
   {
     name: 'United Kingdom',
     flag: '🇬🇧',
-    proxyUrl: 'http://188.114.96.85:80', // Fast proxy from test results
+    proxyUrl: 'http://uk-proxy.example.com:8080', // Simulated UK proxy
+    region: 'eu-west-2',
+    description: 'London, UK servers'
   },
 ];

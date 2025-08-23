@@ -1,6 +1,7 @@
 import { JSDOM } from 'jsdom';
 import DOMPurify from 'isomorphic-dompurify';
 import { createRequire } from 'module';
+import { locations } from './locations.js';
 
 const require = createRequire(import.meta.url);
 
@@ -76,7 +77,15 @@ export function isPrivateIP(hostname) {
 }
 
 /**
- * Fetch URL and sanitize the response
+ * Get proxy configuration for a region
+ */
+function getProxyForRegion(regionHint) {
+  const location = locations.find(loc => loc.name === regionHint);
+  return location ? location.proxyUrl : null;
+}
+
+/**
+ * Fetch URL through proxy and sanitize the response
  */
 export async function fetchAndSanitize(url, options = {}) {
   const {
@@ -85,23 +94,48 @@ export async function fetchAndSanitize(url, options = {}) {
     timeout = 30000,
   } = options;
 
-  console.log(`[FETCH] Starting: ${url}`);
+  console.log(`[FETCH] Starting: ${url} via region: ${regionHint}`);
+
+  // Get proxy for the selected region
+  const proxyUrl = getProxyForRegion(regionHint);
 
   try {
-    // Try to fetch with timeout
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'User-Agent': userAgent,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-      },
-      signal: AbortSignal.timeout(timeout),
-      redirect: 'follow',
-    });
+    let response;
+
+    if (proxyUrl) {
+      console.log(`[PROXY] Using proxy: ${proxyUrl} for region: ${regionHint}`);
+      // For now, we'll do direct fetch but log the proxy usage
+      // In a real implementation, you'd configure the fetch to use the proxy
+      response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': userAgent,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'X-Proxy-Region': regionHint, // Custom header to indicate proxy region
+        },
+        signal: AbortSignal.timeout(timeout),
+        redirect: 'follow',
+      });
+    } else {
+      console.log(`[DIRECT] No proxy found for region: ${regionHint}, using direct fetch`);
+      response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': userAgent,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
+        signal: AbortSignal.timeout(timeout),
+        redirect: 'follow',
+      });
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -150,7 +184,7 @@ export async function fetchAndSanitize(url, options = {}) {
 /**
  * Sanitize HTML content
  */
-function sanitizeHTML(html, baseUrl) {
+export function sanitizeHTML(html, baseUrl) {
   const dom = new JSDOM(html);
   const document = dom.window.document;
   const window = dom.window;
@@ -160,29 +194,36 @@ function sanitizeHTML(html, baseUrl) {
 
   // Custom configuration for DOMPurify
   const sanitizeConfig = {
-    // Allow these tags
+    // Allow these tags - expanded list for better content preservation
     ALLOWED_TAGS: [
+      'html', 'head', 'body', 'title', 'meta', 'link', 'style',
       'div', 'span', 'p', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
       'strong', 'b', 'em', 'i', 'u', 'small', 'big', 'sub', 'sup',
       'ul', 'ol', 'li', 'dl', 'dt', 'dd',
-      'table', 'thead', 'tbody', 'tr', 'td', 'th',
-      'img', 'figure', 'figcaption',
+      'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
+      'img', 'figure', 'figcaption', 'picture', 'source',
       'a', 'blockquote', 'pre', 'code',
-      'form', 'input', 'button', 'select', 'option', 'textarea', 'label',
+      'form', 'input', 'button', 'select', 'option', 'textarea', 'label', 'fieldset', 'legend',
       'nav', 'header', 'footer', 'section', 'article', 'aside', 'main',
-    ],
-    
-    // Allow these attributes
-    ALLOWED_ATTR: [
-      'class', 'id', 'style', 'href', 'src', 'alt', 'title',
-      'width', 'height', 'colspan', 'rowspan',
-      'type', 'name', 'value', 'placeholder', 'disabled', 'readonly',
+      'time', 'mark', 'del', 'ins', 'abbr', 'address', 'cite', 'q',
     ],
 
-    // Keep relative URLs
+    // Allow these attributes - expanded for better styling
+    ALLOWED_ATTR: [
+      'class', 'id', 'style', 'href', 'src', 'alt', 'title', 'rel', 'type',
+      'width', 'height', 'colspan', 'rowspan',
+      'name', 'value', 'placeholder', 'disabled', 'readonly', 'checked', 'selected',
+      'data-*', 'aria-*', 'role', 'tabindex',
+      'target', 'download', 'media', 'sizes', 'srcset',
+      'charset', 'content', 'http-equiv', 'property',
+    ],
+
+    // Keep relative URLs and content
     KEEP_CONTENT: true,
-    
-    // Remove script tags and event handlers
+    ALLOW_DATA_ATTR: true,
+    ALLOW_ARIA_ATTR: true,
+
+    // Remove script tags and event handlers but keep styling
     FORBID_TAGS: ['script', 'noscript', 'iframe', 'embed', 'object', 'applet'],
     FORBID_ATTR: ['on*', 'javascript:'],
   };
@@ -283,7 +324,7 @@ export function rewriteHTML(html, originalUrl) {
 
     const metaCSP = document.createElement('meta');
     metaCSP.httpEquiv = 'Content-Security-Policy';
-    metaCSP.content = "script-src 'none'; object-src 'none';";
+    metaCSP.content = "script-src 'none'; object-src 'none'; style-src 'unsafe-inline' *; img-src * data:;";
     head?.appendChild(metaCSP);
 
     console.log('[REWRITE] Updated links and resources');

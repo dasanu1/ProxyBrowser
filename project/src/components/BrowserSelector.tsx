@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Search, Globe, Shield } from 'lucide-react';
+import { ChevronDown, Search, Shield } from 'lucide-react';
 
 interface Browser {
   id: string;
@@ -27,13 +27,6 @@ const BrowserSelector: React.FC<BrowserSelectorProps> = ({
       name: 'DuckDuckGo',
       icon: <Search className="w-5 h-5 text-orange-500" />,
       description: 'Privacy-focused search',
-    },
-    {
-      id: 'google',
-      name: 'Google',
-      icon: <Globe className="w-5 h-5 text-blue-500" />,
-      description: 'Standard web search',
-      disabled: true,
     },
     {
       id: 'tor',

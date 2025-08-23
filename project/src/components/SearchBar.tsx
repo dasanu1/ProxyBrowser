@@ -40,7 +40,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   useEffect(() => {
     const fetchPingData = async () => {
       try {
-        const response = await fetch('http://localhost:3001/api/locations/status');
+        const response = await fetch('http://localhost:3003/api/locations/status');
         if (response.ok) {
           const data = await response.json();
           setRegions(prevRegions => 
@@ -59,8 +59,8 @@ const SearchBar: React.FC<SearchBarProps> = ({
     };
 
     fetchPingData();
-    
-    // Refresh ping data every 10 seconds
+
+    // Refresh ping data every 10 seconds for real-time updates (reduced frequency)
     const interval = setInterval(fetchPingData, 10000);
     return () => clearInterval(interval);
   }, []);
