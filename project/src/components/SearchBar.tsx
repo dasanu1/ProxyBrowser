@@ -45,7 +45,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
           const data = await response.json();
           setRegions(prevRegions => 
             prevRegions.map(region => {
-              const locationData = data.find((loc: any) => loc.name === region.name);
+              const locationData = data.find((loc: { name: string; ping: number }) => loc.name === region.name);
               return {
                 ...region,
                 ping: locationData ? locationData.ping : null
@@ -67,7 +67,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
 
   // Handle connection timer
   useEffect(() => {
-    let interval: any;
+    let interval: NodeJS.Timeout | undefined;
     if (isConnected && connectionStartTime) {
       interval = setInterval(() => {
         setConnectionTime(Math.floor((Date.now() - connectionStartTime) / 1000));

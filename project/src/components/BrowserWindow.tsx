@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Minimize2, 
@@ -8,8 +8,7 @@ import {
   ArrowRight, 
   RotateCw, 
   Plus,
-  Minus,
-  Square
+  Minus
 } from 'lucide-react';
 
 interface Tab {
@@ -40,6 +39,90 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({
   onShowToast,
 }) => {
   const [urlInput, setUrlInput] = useState('');
+  
+  // Add event listener for messages from iframe
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      // Handle navigation messages from the iframe
+      console.log('Received message from iframe:', event.data);
+      if (event.data && event.data.type === 'navigate' && event.data.url) {
+        const tabId = browserState.activeTabId;
+        if (!tabId) return;
+        
+        console.log('Navigating to:', event.data.url);
+        // Update the tab to loading state
+        setBrowserState(prev => ({
+          ...prev,
+          tabs: prev.tabs.map(tab =>
+            tab.id === tabId
+              ? { ...tab, loading: true }
+              : tab
+          ),
+        }));
+        
+        try {
+          // Fetch the new URL through the proxy
+          const response = await fetch('http://localhost:3003/api/proxy/fetch', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              url: event.data.url,
+              regionHint: 'United States', // Default region
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const data = await response.json();
+          console.log('Received proxy data:', data);
+          
+          // Update the tab with the new content
+          setBrowserState(prev => ({
+            ...prev,
+            tabs: prev.tabs.map(tab =>
+              tab.id === tabId
+                ? { 
+                    ...tab, 
+                    title: data.title || 'Proxied Page', 
+                    content: data.html, 
+                    url: event.data.url,
+                    loading: false 
+                  }
+                : tab
+            ),
+          }));
+          
+          // Update URL input
+          setUrlInput(event.data.url);
+          
+        } catch (error) {
+          // Handle error
+          setBrowserState(prev => ({
+            ...prev,
+            tabs: prev.tabs.map(tab =>
+              tab.id === tabId
+                ? {
+                    ...tab,
+                    title: 'Error',
+                    content: `<div class="p-8 text-center"><h2 class="text-xl font-bold mb-4">Connection Error</h2><p class="text-gray-600">Unable to load: ${event.data.url}</p></div>`,
+                    loading: false
+                  }
+                : tab
+            ),
+          }));
+          
+          onShowToast(`Failed to load page: ${error.message}`, 'error');
+        }
+      }
+    };
+    
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [browserState.activeTabId, setBrowserState, onShowToast]);
 
   const activeTab = browserState.tabs.find(tab => tab.id === browserState.activeTabId);
 
@@ -63,10 +146,55 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({
     const newTab: Tab = {
       id: tabId,
       title: 'New Tab',
-      url: '',
-      content: '<div class="p-8 text-center text-gray-500">Enter a URL to browse</div>',
-      loading: false,
+      url: 'https://duckduckgo.com',
+      content: '<div class="p-8 text-center text-gray-500">Loading DuckDuckGo...</div>',
+      loading: true,
     };
+    
+    // Automatically load DuckDuckGo for new tabs
+    fetch('/api/proxy/fetch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: 'https://duckduckgo.com',
+        regionHint: 'United States',
+      }),
+    })
+    .then(response => response.json())
+    .then(data => {
+      setBrowserState(prev => ({
+        ...prev,
+        tabs: prev.tabs.map(t =>
+          t.id === tabId
+            ? {
+                ...t,
+                title: data.title,
+                content: data.html,
+                url: data.url,
+                loading: false,
+              }
+            : t
+        ),
+      }));
+    })
+    .catch(error => {
+      console.error('Error loading DuckDuckGo:', error);
+      setBrowserState(prev => ({
+        ...prev,
+        tabs: prev.tabs.map(t =>
+          t.id === tabId
+            ? {
+                ...t,
+                title: 'Error',
+                content: '<div class="p-8 text-center text-red-500">Failed to load DuckDuckGo</div>',
+                loading: false,
+              }
+            : t
+        ),
+      }));
+    });
 
     setBrowserState(prev => ({
       ...prev,
@@ -118,25 +246,10 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({
   };
 
   return (
-    <motion.div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${
-        browserState.isMinimized ? 'pointer-events-none' : ''
-      }`}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
-      {!browserState.isMinimized && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" onClick={handleMinimize} />
-      )}
-      
+    <div className="w-full h-full">
       <motion.div
-        className={`relative bg-white rounded-3xl shadow-2xl overflow-hidden ${
-          browserState.isFullscreen 
-            ? 'w-full h-full' 
-            : browserState.isMinimized
-            ? 'w-32 h-20'
-            : 'w-full max-w-6xl h-4/5'
+        className={`bg-white rounded-xl shadow-lg overflow-hidden ${
+          browserState.isMinimized ? 'h-16' : 'h-[calc(100vh-200px)]'
         }`}
         variants={windowVariants}
         animate={getWindowState()}
@@ -272,7 +385,78 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({
               type="text"
               value={urlInput || activeTab?.url || ''}
               onChange={(e) => setUrlInput(e.target.value)}
-              placeholder="Enter URL..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const url = urlInput.trim();
+                  if (url) {
+                    // Check if it's a search query or URL
+                    const isUrl = url.includes('.') && !url.includes(' ');
+                    const targetUrl = isUrl 
+                      ? (url.startsWith('http') ? url : `https://${url}`)
+                      : `https://duckduckgo.com/?q=${encodeURIComponent(url)}`;
+                    
+                    // Update the active tab to loading state
+                    if (browserState.activeTabId) {
+                      setBrowserState(prev => ({
+                        ...prev,
+                        tabs: prev.tabs.map(tab =>
+                          tab.id === browserState.activeTabId
+                            ? { ...tab, loading: true }
+                            : tab
+                        ),
+                      }));
+                      
+                      // Fetch the content through the proxy
+                      fetch('/api/proxy/fetch', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          url: targetUrl,
+                          regionHint: 'United States',
+                        }),
+                      })
+                      .then(response => response.json())
+                      .then(data => {
+                        setBrowserState(prev => ({
+                          ...prev,
+                          tabs: prev.tabs.map(tab =>
+                            tab.id === browserState.activeTabId
+                              ? {
+                                  ...tab,
+                                  title: data.title || 'Proxied Page',
+                                  content: data.html,
+                                  url: targetUrl,
+                                  loading: false,
+                                }
+                              : tab
+                          ),
+                        }));
+                      })
+                      .catch(error => {
+                        console.error('Error loading URL:', error);
+                        setBrowserState(prev => ({
+                          ...prev,
+                          tabs: prev.tabs.map(tab =>
+                            tab.id === browserState.activeTabId
+                              ? {
+                                  ...tab,
+                                  title: 'Error',
+                                  content: `<div class="p-8 text-center"><h2 class="text-xl font-bold mb-4">Connection Error</h2><p class="text-gray-600">Unable to load: ${targetUrl}</p></div>`,
+                                  loading: false,
+                                }
+                              : tab
+                          ),
+                        }));
+                        onShowToast(`Failed to load page: ${error.message}`, 'error');
+                      });
+                    }
+                  }
+                }
+              }}
+              placeholder="Search or enter URL..."
               className="flex-1 px-4 py-2 bg-gray-100 rounded-2xl outline-none focus:bg-white focus:ring-2 focus:ring-primary"
             />
           </div>
@@ -280,7 +464,7 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({
 
         {/* Content Area */}
         {!browserState.isMinimized && activeTab && (
-          <div className="flex-1 bg-white overflow-hidden">
+          <div className="flex-1 bg-white overflow-hidden border-t border-gray-200">
             {activeTab.loading ? (
               <div className="flex items-center justify-center h-full">
                 <motion.div
@@ -290,17 +474,20 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({
                 />
               </div>
             ) : (
-              <iframe
-                src={`data:text/html;charset=utf-8,${encodeURIComponent(activeTab.content)}`}
-                className="w-full h-full border-none"
-                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
-                title={activeTab.title}
-              />
+              <div className="w-full h-full relative">
+                <iframe
+                  src={`data:text/html;charset=utf-8,${encodeURIComponent(activeTab.content)}`}
+                  className="w-full h-full border-none bg-white absolute inset-0"
+                  sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+                  title={activeTab.title}
+                  onLoad={() => console.log('Iframe loaded:', activeTab.title)}
+                />
+              </div>
             )}
           </div>
         )}
       </motion.div>
-    </motion.div>
+    </div>
   );
 };
 

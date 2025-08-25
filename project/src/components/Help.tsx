@@ -1,49 +1,95 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Search, Book, MessageCircle, Shield } from 'lucide-react';
+import { ChevronDown, Search, Book, MessageCircle, Shield, Mail, X } from 'lucide-react';
 
 const Help: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [contactForm, setContactForm] = useState({
+    name: '',
+    email: '',
+    subject: '',
+    description: ''
+  });
+
+  const handleContactFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setContactForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleContactFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Here you would typically send the form data to your backend
+    alert('Thank you for your message. We will get back to you soon!');
+    setContactForm({
+      name: '',
+      email: '',
+      subject: '',
+      description: ''
+    });
+    setShowContactForm(false);
+  };
 
   const faqs = [
     {
-      question: 'How does the proxy browser work?',
-      answer: 'Our proxy browser routes your web traffic through secure servers, masking your IP address and encrypting your connection for complete privacy.',
+      question: 'What is Xlora?',
+      answer: 'Xlora is an advanced proxy platform that routes your web traffic through secure servers, masking your IP address and encrypting your connection for complete privacy.',
+      category: 'general',
     },
     {
-      question: 'Is my browsing data stored?',
-      answer: 'No, we maintain a strict zero-logs policy. Your browsing history, search queries, and personal data are never stored on our servers.',
+      question: 'Is Xlora free to use?',
+      answer: 'Yes, Xlora offers a free tier with basic features. Premium plans are available for users who need advanced features and higher bandwidth.',
+      category: 'general',
+    },
+    {
+      question: 'How does Xlora protect my privacy?',
+      answer: 'Xlora maintains a strict zero-logs policy. Your browsing history, search queries, and personal data are never stored on our servers.',
+      category: 'security',
     },
     {
       question: 'Can I access geo-restricted content?',
       answer: 'Yes, our global network of proxy servers allows you to access content from different regions while maintaining your privacy.',
+      category: 'technical',
     },
     {
       question: 'How secure is the connection?',
       answer: 'We use military-grade encryption and advanced security protocols to ensure your connection is completely secure from any threats.',
+      category: 'security',
     },
     {
       question: 'What about browser compatibility?',
       answer: 'Our platform works seamlessly with all modern browsers and devices, providing a consistent experience across all platforms.',
+      category: 'technical',
     },
   ];
 
+  const filteredFaqs = activeCategory
+    ? faqs.filter(faq => faq.category === activeCategory)
+    : faqs;
+    
   const helpCategories = [
     {
       icon: Book,
-      title: 'Getting Started',
-      description: 'Learn the basics of using our proxy browser platform.',
+      title: 'General',
+      description: 'Learn the basics of using our proxy platform.',
+      category: 'general',
     },
     {
       icon: Shield,
-      title: 'Security & Privacy',
+      title: 'Security',
       description: 'Understanding our security measures and privacy policies.',
+      category: 'security',
     },
     {
       icon: MessageCircle,
-      title: 'Troubleshooting',
-      description: 'Common issues and their solutions.',
+      title: 'Technical',
+      description: 'Technical details and troubleshooting.',
+      category: 'technical',
     },
   ];
 
@@ -75,6 +121,29 @@ const Help: React.FC = () => {
           </div>
         </motion.div>
 
+        <div className="flex justify-center mb-8 space-x-2">
+          <motion.button
+            onClick={() => setActiveCategory(null)}
+            className={`px-6 py-2 rounded-full ${!activeCategory ? 'bg-primary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} transition-all`}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            All
+          </motion.button>
+          
+          {helpCategories.map((category) => (
+            <motion.button
+              key={category.title}
+              onClick={() => setActiveCategory(category.category)}
+              className={`px-6 py-2 rounded-full ${activeCategory === category.category ? 'bg-primary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} transition-all`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              {category.title}
+            </motion.button>
+          ))}
+        </div>
+        
         <div className="grid lg:grid-cols-3 gap-8 mb-16">
           {helpCategories.map((category, index) => (
             <motion.div
@@ -84,6 +153,7 @@ const Help: React.FC = () => {
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: index * 0.1 }}
               whileHover={{ y: -5 }}
+              onClick={() => setActiveCategory(category.category)}
             >
               <div className="w-12 h-12 bg-gradient-to-br from-primary to-green-400 rounded-2xl flex items-center justify-center mb-6">
                 <category.icon className="w-6 h-6 text-white" />
@@ -109,7 +179,7 @@ const Help: React.FC = () => {
           </h3>
           
           <div className="space-y-4">
-            {faqs.map((faq, index) => (
+            {filteredFaqs.map((faq, index) => (
               <div
                 key={index}
                 className="bg-gray-50 rounded-2xl overflow-hidden"
@@ -148,6 +218,112 @@ const Help: React.FC = () => {
             ))}
           </div>
         </motion.div>
+        
+        <div className="flex justify-center mt-12 space-x-4">
+          <motion.button
+            onClick={() => setShowContactForm(true)}
+            className="flex items-center space-x-2 px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary-dark transition-colors"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <Mail className="w-5 h-5" />
+            <span>Email Support</span>
+          </motion.button>
+        </div>
+        
+        {/* Contact Form Modal */}
+        <AnimatePresence>
+          {showContactForm && (
+            <motion.div
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowContactForm(false)}
+            >
+              <motion.div
+                className="bg-white rounded-2xl p-6 w-full max-w-md"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-bold text-gray-900">Contact Support</h3>
+                  <button
+                    onClick={() => setShowContactForm(false)}
+                    className="p-1 rounded-full hover:bg-gray-100"
+                  >
+                    <X className="w-5 h-5 text-gray-500" />
+                  </button>
+                </div>
+                
+                <form onSubmit={handleContactFormSubmit}>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                      <input
+                        type="text"
+                        id="name"
+                        name="name"
+                        value={contactForm.name}
+                        onChange={handleContactFormChange}
+                        required
+                        className="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary focus:border-transparent"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                      <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        value={contactForm.email}
+                        onChange={handleContactFormChange}
+                        required
+                        className="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary focus:border-transparent"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                      <input
+                        type="text"
+                        id="subject"
+                        name="subject"
+                        value={contactForm.subject}
+                        onChange={handleContactFormChange}
+                        required
+                        className="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary focus:border-transparent"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                      <textarea
+                        id="description"
+                        name="description"
+                        value={contactForm.description}
+                        onChange={handleContactFormChange}
+                        required
+                        rows={4}
+                        className="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary focus:border-transparent"
+                      />
+                    </div>
+                    
+                    <button
+                      type="submit"
+                      className="w-full py-3 bg-primary text-white rounded-xl hover:bg-primary-dark transition-colors"
+                    >
+                      Submit
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </section>
   );

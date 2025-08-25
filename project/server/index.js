@@ -38,7 +38,7 @@ const corsOptions = {
     : (origin, callback) => {
         // Allow requests from any localhost or 127.0.0.1 port in dev
         if (!origin) return callback(null, true);
-        const allowed = /^https?:\/\/(localhost|127\.0\.0\.1)(:\\d+)?$/.test(origin);
+        const allowed = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
         return callback(allowed ? null : new Error('Not allowed by CORS'), allowed);
       },
   credentials: true,

@@ -1,8 +1,23 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Globe, Shield, Zap } from 'lucide-react';
+import { Database, Shield, Zap } from 'lucide-react';
 
 const Header: React.FC = () => {
+  const [scrolled, setScrolled] = useState(false);
+  
+  useEffect(() => {
+    const handleScroll = () => {
+      const isScrolled = window.scrollY > 50;
+      if (isScrolled !== scrolled) {
+        setScrolled(isScrolled);
+      }
+    };
+    
+    window.addEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [scrolled]);
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     if (element) {
@@ -12,7 +27,7 @@ const Header: React.FC = () => {
 
   return (
     <motion.header 
-      className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200"
+      className={`fixed top-0 left-0 right-0 z-50 ${scrolled ? 'bg-white/90 shadow-md' : 'bg-white/80'} backdrop-blur-md border-b border-gray-200 transition-all duration-300`}
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.6 }}
@@ -24,9 +39,10 @@ const Header: React.FC = () => {
             whileHover={{ scale: 1.05 }}
           >
             <div className="w-8 h-8 bg-gradient-to-br from-primary to-blue-400 rounded-lg flex items-center justify-center">
-              <Globe className="w-5 h-5 text-white" />
+              <Database className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-gray-900">ProxyBrowser</span>
+            <span className="text-xl font-bold text-gray-900">Xlora</span>
+            <span className="text-xs text-gray-500 ml-1 mt-1">Alpha Platform</span>
           </motion.div>
 
           <div className="hidden md:flex items-center space-x-8">

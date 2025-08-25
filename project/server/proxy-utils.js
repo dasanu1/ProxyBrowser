@@ -259,7 +259,10 @@ export function rewriteHTML(html, originalUrl) {
     const dom = new JSDOM(html);
     const document = dom.window.document;
     const baseURL = new URL(originalUrl);
-
+    
+    // Special handling for DuckDuckGo search results
+    const isDuckDuckGo = originalUrl.includes('duckduckgo.com');
+    
     // Rewrite all links to go through proxy
     const links = document.querySelectorAll('a[href]');
     links.forEach(link => {
@@ -267,11 +270,18 @@ export function rewriteHTML(html, originalUrl) {
       if (href && !href.startsWith('javascript:') && !href.startsWith('mailto:')) {
         try {
           const absoluteUrl = new URL(href, baseURL).toString();
-          // Instead of rewriting to proxy, we'll leave them as-is
-          // The frontend will handle proxy routing
-          link.setAttribute('href', absoluteUrl);
-          link.setAttribute('target', '_blank');
-          link.setAttribute('rel', 'noopener noreferrer');
+          
+          if (isDuckDuckGo) {
+            // For DuckDuckGo, we need to handle search result links differently
+            // Make them work within our proxy system
+            link.setAttribute('href', `javascript:window.parent.postMessage({type: 'navigate', url: '${absoluteUrl}'}, '*')`);
+            link.removeAttribute('target');
+          } else {
+            // For other sites, use the standard approach
+            link.setAttribute('href', absoluteUrl);
+            link.setAttribute('target', '_blank');
+            link.setAttribute('rel', 'noopener noreferrer');
+          }
         } catch {
           // Invalid URL, remove href
           link.removeAttribute('href');
@@ -321,11 +331,49 @@ export function rewriteHTML(html, originalUrl) {
     metaViewport.name = 'viewport';
     metaViewport.content = 'width=device-width, initial-scale=1';
     head?.appendChild(metaViewport);
-
+    
+    // Modify CSP to allow inline scripts for DuckDuckGo integration
     const metaCSP = document.createElement('meta');
     metaCSP.httpEquiv = 'Content-Security-Policy';
-    metaCSP.content = "script-src 'none'; object-src 'none'; style-src 'unsafe-inline' *; img-src * data:;";
+    metaCSP.content = "script-src 'unsafe-inline' 'self'; object-src 'none'; style-src 'unsafe-inline' *; img-src * data:;";
     head?.appendChild(metaCSP);
+    
+    // Add script to handle form submissions for search functionality
+    if (baseURL.hostname.includes('duckduckgo.com')) {
+      const script = document.createElement('script');
+      script.textContent = `
+        console.log('DuckDuckGo script injected');
+        document.addEventListener('DOMContentLoaded', function() {
+          console.log('DuckDuckGo DOM loaded');
+          const forms = document.querySelectorAll('form');
+          console.log('Found forms:', forms.length);
+          forms.forEach(form => {
+            form.addEventListener('submit', function(e) {
+              e.preventDefault();
+              console.log('Form submitted');
+              const formData = new FormData(form);
+              const searchParams = new URLSearchParams();
+              for (const [key, value] of formData.entries()) {
+                searchParams.append(key, value);
+                console.log('Form data:', key, value);
+              }
+              const searchUrl = '${baseURL.origin + baseURL.pathname}?' + searchParams.toString();
+              console.log('Navigating to:', searchUrl);
+              window.parent.postMessage({type: 'navigate', url: searchUrl}, '*');
+            });
+          });
+          
+          // Also handle clicks on search results
+          document.addEventListener('click', function(e) {
+            const link = e.target.closest('a');
+            if (link && link.href) {
+              console.log('Link clicked:', link.href);
+            }
+          });
+        });
+      `;
+      head?.appendChild(script);
+    }
 
     console.log('[REWRITE] Updated links and resources');
     return dom.serialize();
